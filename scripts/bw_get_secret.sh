@@ -85,7 +85,7 @@ if [[ "$item_mode" == "id" ]]; then
   item_json="$(bw get item "$item_query" --raw)"
 else
   search_json="$(bw list items --search "$item_query" --raw)"
-  if ! item_json="$(python3 - "$item_query" <<'PY'
+  if ! item_json="$(printf '%s' "$search_json" | python3 -c '
 import json
 import sys
 
@@ -118,8 +118,7 @@ if picked is None:
     raise SystemExit(1)
 
 print(json.dumps(picked))
-PY
-<<<"$search_json")"; then
+' "$item_query")"; then
     echo "No Bitwarden item found for: $item_query" >&2
     exit 1
   fi
@@ -130,7 +129,7 @@ if [[ "$print_json" -eq 1 ]]; then
   exit 0
 fi
 
-item_id="$(python3 - <<'PY'
+item_id="$(printf '%s' "$item_json" | python3 -c '
 import json
 import sys
 
@@ -141,8 +140,7 @@ except Exception:
     raise SystemExit(0)
 
 print(str(data.get("id") or ""))
-PY
-<<<"$item_json")"
+')"
 
 if [[ "$field" == "totp" ]]; then
   if [[ -z "$item_id" ]]; then
@@ -153,7 +151,7 @@ if [[ "$field" == "totp" ]]; then
   exit 0
 fi
 
-if ! python3 - "$field" <<'PY'
+if ! printf '%s' "$item_json" | python3 -c '
 import json
 import sys
 
@@ -201,8 +199,7 @@ if value is None or str(value) == "":
     raise SystemExit(1)
 
 print(str(value))
-PY
-<<<"$item_json"; then
+' "$field"; then
   echo "Requested field '$field' is missing or unsupported." >&2
   exit 1
 fi
