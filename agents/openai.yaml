@@ -1,4 +1,4 @@
 interface:
   display_name: "Bitwarden CLI"
   short_description: "Operate Bitwarden bw CLI safely"
-  default_prompt: "Use this skill when working with Bitwarden bw CLI for login or unlock sessions, searching items, and retrieving or updating credentials safely."
+  default_prompt: "Use this skill when working with Bitwarden bw CLI for login or unlock sessions, searching items, and retrieving or updating credentials safely. If the agent context cannot access a valid BW_SESSION or vault remains locked, ask the user in chat for a fresh session key and include the hint: bw unlock --raw."

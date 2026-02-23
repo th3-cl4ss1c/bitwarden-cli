@@ -38,6 +38,14 @@ scripts/bw_get_secret.sh --item "GitHub" --field password
 6. Retrieve only requested fields.
 7. Avoid printing secrets in logs, files, or command history.
 
+If running in chat/agent context and commands still see `locked` or cannot read `BW_SESSION`, request a fresh session key from the user in chat and include this hint:
+
+```bash
+bw unlock --raw
+```
+
+Then use it via `--session <key>` for all `bw` commands in that turn.
+
 ## Common Tasks
 
 Read item metadata without exposing secrets:
