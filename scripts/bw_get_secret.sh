@@ -4,12 +4,13 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  bw_get_secret.sh --item <name> [--field <field>] [--json]
-  bw_get_secret.sh --id <item-id> [--field <field>] [--json]
+  bw_get_secret.sh --item <name> [--field <field>] [--json] [--session <key>]
+  bw_get_secret.sh --id <item-id> [--field <field>] [--json] [--session <key>]
 
 Options:
   --item <name>      Find item by search and prefer exact name match.
   --id <item-id>     Read item by exact Bitwarden item ID.
+  --session <key>    Use this BW_SESSION key for all bw commands.
   --field <field>    Field to return (default: password).
                      Supported: password, username, uri, notes, totp,
                      name, id, custom:FIELD_NAME
@@ -27,6 +28,7 @@ item_query=""
 item_mode=""
 field="password"
 print_json=0
+session_override=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -45,6 +47,11 @@ while [[ $# -gt 0 ]]; do
     --field)
       [[ $# -ge 2 ]] || { echo "--field requires a value" >&2; exit 2; }
       field="$2"
+      shift 2
+      ;;
+    --session)
+      [[ $# -ge 2 ]] || { echo "--session requires a value" >&2; exit 2; }
+      session_override="$2"
       shift 2
       ;;
     --json)
@@ -75,16 +82,48 @@ if ! command -v bw >/dev/null 2>&1; then
 fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+eval "$($script_dir/bw_env.sh)"
+
+if [[ -n "$session_override" ]]; then
+  export BW_SESSION="$session_override"
+fi
 
 if [[ -z "${BW_SESSION:-}" ]]; then
   # shellcheck disable=SC1091
   eval "$($script_dir/bw_session.sh)"
 fi
 
+bw_call() {
+  local output=""
+  local rc=0
+  local -a cmd=(bw "$@")
+
+  if [[ -n "${BW_SESSION:-}" ]]; then
+    cmd+=(--session "$BW_SESSION")
+    output="$(BW_NOINTERACTION=true "${cmd[@]}" 2>&1)" || rc=$?
+    if [[ $rc -ne 0 && "$output" == *"Vault is locked."* ]]; then
+      # Refresh fallback appdata and retry once with the same session key.
+      # shellcheck disable=SC1091
+      eval "$($script_dir/bw_env.sh)"
+      output="$(BW_NOINTERACTION=true "${cmd[@]}" 2>&1)" || rc=$?
+    fi
+  else
+    output="$("${cmd[@]}" 2>&1)" || rc=$?
+  fi
+
+  if [[ $rc -ne 0 ]]; then
+    printf '%s\n' "$output" >&2
+    return $rc
+  fi
+
+  printf '%s' "$output"
+}
+
 if [[ "$item_mode" == "id" ]]; then
-  item_json="$(bw get item "$item_query" --raw)"
+  item_json="$(bw_call get item "$item_query" --raw)"
 else
-  search_json="$(bw list items --search "$item_query" --raw)"
+  search_json="$(bw_call list items --search "$item_query" --raw)"
   if ! item_json="$(printf '%s' "$search_json" | python3 -c '
 import json
 import sys
@@ -147,7 +186,7 @@ if [[ "$field" == "totp" ]]; then
     echo "Could not resolve item ID for TOTP retrieval." >&2
     exit 1
   fi
-  bw get totp "$item_id" --raw
+  bw_call get totp "$item_id" --raw
   exit 0
 fi
 

@@ -42,9 +42,13 @@ if ! command -v bw >/dev/null 2>&1; then
   exit 127
 fi
 
-status_json="$(bw status --raw 2>/dev/null || true)"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+eval "$($script_dir/bw_env.sh)"
 
-readarray -t parsed < <(python3 - "$status_json" <<'PY'
+read_status() {
+  local payload="${1:-}"
+  python3 - "$payload" <<'PY'
 import json
 import sys
 
@@ -64,10 +68,26 @@ if payload:
 print(status)
 print(session)
 PY
-)
+}
 
-status="${parsed[0]:-unknown}"
-session="${parsed[1]:-}"
+session=""
+status="unknown"
+
+# Reuse a user-provided session key when possible to avoid interactive prompts.
+if [[ -n "${BW_SESSION:-}" ]]; then
+  if BW_NOINTERACTION=true bw list items --search "__codex_probe__" --session "$BW_SESSION" --raw >/dev/null 2>&1; then
+    session="$BW_SESSION"
+    status="unlocked"
+  fi
+fi
+
+if [[ "$status" != "unlocked" ]]; then
+  status_json="$(bw status --raw 2>/dev/null || true)"
+  readarray -t parsed < <(read_status "$status_json")
+  status="${parsed[0]:-unknown}"
+  session="${parsed[1]:-}"
+fi
+
 
 if [[ "$status" == "unauthenticated" ]]; then
   echo "Bitwarden is unauthenticated. Running 'bw login'." >&2

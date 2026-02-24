@@ -9,6 +9,12 @@ command -v bw
 bw --version
 ```
 
+- Prepare writable appdata (important in sandboxed/agent runs):
+
+```bash
+eval "$(scripts/bw_env.sh)"
+```
+
 - Ensure current account context:
 
 ```bash
@@ -28,6 +34,12 @@ Unlock and set session in current shell:
 
 ```bash
 export BW_SESSION="$(bw unlock --raw)"
+```
+
+Or via skill helper:
+
+```bash
+eval "$(scripts/bw_session.sh)"
 ```
 
 Lock or logout:
@@ -67,6 +79,12 @@ Read TOTP code:
 
 ```bash
 bw get totp "<item-id>" --raw
+```
+
+Read one field with an explicit session key:
+
+```bash
+scripts/bw_get_secret.sh --item "Prod API" --field custom:API_KEY --session "<BW_SESSION>"
 ```
 
 ## Create Item (Login Type)
